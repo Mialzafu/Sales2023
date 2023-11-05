@@ -1,0 +1,167 @@
+﻿@page "/countries/details/{Id:int}"
+@inject IRepository repository
+@inject NavigationManager navigationManager
+@inject SweetAlertService sweetAlertService
+
+@if (country is null)
+{
+    <p>Cargando...</p>
+}
+else
+{
+    <h3>@country.Name</h3>
+
+    <div class="mb-2" style="display: flex; flex-wrap:wrap; align-items: center;">
+        <div>
+            <a class="btn btn-primary" href="/states/create/@country.Id">Nuevo Estado/Provincia</a>
+            <a class="btn btn-success" href="/countries">Regresar</a>
+        </div>
+        <div class="mx-2">
+            <input style="width: 400px;" type="text" class="form-control" id="titulo" placeholder="Buscar estado/provincia..." @bind-value="Filter" />
+        </div>
+        <div>
+            <button type="button" class="btn btn-outline-primary" @onclick="ApplyFilterAsync">Filtrar</button>
+            <button type="button" class="btn btn-outline-danger" @onclick="CleanFilterAsync">Limpiar</button>
+        </div>
+    </div>
+
+    <Pagination CurrentPage="currentPage"
+                TotalPages="totalPages"
+                SelectedPage="SelectedPageAsync" />
+
+    <GenericList MyList="States!">
+        <Body>
+            <table class="table table-striped">
+                <thead>
+                    <tr>
+                        <th>Estado/Provincia</th>
+                        <th style="width:140px">Ciudades</th>
+                        <th style="width:220px"></th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var state in States!)
+                    {
+                        <tr>
+                            <td>
+                                @state.Name
+                            </td>
+                            <td>
+                                @state.CitiesNumber
+                            </td>
+                            <td>
+                                <a class="btn btn-info" href="/states/details/@state.Id">Detalles</a>
+                                <a class="btn btn-warning" href="/states/edit/@state.Id">Editar</a>
+                                <button class="btn btn-danger" @onclick=@(() => DeleteAsync(state.Id))>Borrar</button>
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </Body>
+    </GenericList>
+}
+
+@code {
+    private Country? country;
+    private List<State>? States;
+    private int currentPage = 1;
+    private int totalPages;
+
+    [Parameter]
+    public int Id { get; set; }
+
+    [Parameter]
+    [SupplyParameterFromQuery]
+    public string Page { get; set; } = string.Empty;
+
+    [Parameter]
+    [SupplyParameterFromQuery]
+    public string Filter { get; set; } = string.Empty;
+
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadAsync();
+    }
+
+    private async Task SelectedPageAsync(int page)
+    {
+        currentPage = page;
+        await LoadAsync(page);
+    }
+
+    private async Task LoadAsync(int page=1)
+    {
+        if (!string.IsNullOrWhiteSpace(Page))
+        {
+            page = Convert.ToInt32(Page);
+        }
+
+        string url1 = $"api/countries/{Id}";
+        string url2 = string.Empty;
+        string url3 = string.Empty;
+
+        if (string.IsNullOrEmpty(Filter))
+        {
+            url2 = $"api/states?id={Id}&page={page}";
+            url3 = $"api/states/totalPages?id={Id}";
+        }
+        else
+        {
+            url2 = $"api/states?id={Id}&page={page}&filter={Filter}";
+            url3 = $"api/states/totalPages?id={Id}&filter={Filter}";
+        }
+
+        var responseHppt1 = await repository.Get<Country>(url1);
+        var responseHppt2 = await repository.Get<List<State>>(url2);
+        var responseHppt3 = await repository.Get<int>(url3);
+        country = responseHppt1.Response;
+        States = responseHppt2.Response;
+        totalPages = responseHppt3.Response;
+    }
+
+    private async Task DeleteAsync(int id)
+    {
+        var result = await sweetAlertService.FireAsync(new SweetAlertOptions
+            {
+                Title = "Confirmación",
+                Text = "¿Realmente deseas eliminar el registro?",
+                Icon = SweetAlertIcon.Question,
+                ShowCancelButton = true,
+                CancelButtonText = "No",
+                ConfirmButtonText = "Si"
+            });
+
+        var confirm = string.IsNullOrEmpty(result.Value);
+
+        if (confirm)
+            return;
+
+        var responseHttp = await repository.Delete($"/api/states/{id}");
+        if (responseHttp.Error)
+        {
+            if (responseHttp.HttpResponseMessage.StatusCode != HttpStatusCode.NotFound)
+            {
+                var message = await responseHttp.GetErrorMessageAsync();
+                await sweetAlertService.FireAsync("Error", message, SweetAlertIcon.Error);
+                return;
+            }
+        }
+
+        await LoadAsync();
+    }
+
+    private async Task ApplyFilterAsync()
+    {
+        int page = 1;
+        await LoadAsync(page);
+        await SelectedPageAsync(page);
+    }
+
+    private async Task CleanFilterAsync()
+    {
+        Filter = string.Empty;
+        await ApplyFilterAsync();
+    }
+}
