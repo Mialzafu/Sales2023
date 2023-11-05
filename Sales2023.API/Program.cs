@@ -1,6 +1,9 @@
+using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using Sales2023.API.Data;
+using Sales2023.API.Helpers;
 using Sales2023.API.Services;
+using Sales2023.Shared.Entities;
 using System.Text.Json.Serialization;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -15,6 +18,22 @@ builder.Services.AddSwaggerGen();
 builder.Services.AddDbContext<DataContext>(options => options.UseSqlServer("name=DBConnectionString"));
 builder.Services.AddTransient<SeedDb>();
 builder.Services.AddScoped<IApiService, ApiService>();
+
+builder.Services.AddIdentity<User, IdentityRole>(i =>
+{
+    i.User.RequireUniqueEmail = true;
+    i.Password.RequireDigit = false;
+    i.Password.RequiredUniqueChars = 0;
+    i.Password.RequireLowercase = false;
+    i.Password.RequireNonAlphanumeric = false;
+    i.Password.RequireUppercase = false;
+    i.Password.RequiredLength = 6;
+})
+.AddEntityFrameworkStores<DataContext>()
+.AddDefaultTokenProviders();
+
+builder.Services.AddScoped<IUserHelper, UserHelper>();
+
 
 var app = builder.Build();
 SeedData(app);
@@ -38,7 +57,7 @@ if (app.Environment.IsDevelopment())
 }
 
 app.UseHttpsRedirection();
-
+app.UseAuthentication();
 app.UseAuthorization();
 
 app.MapControllers();
